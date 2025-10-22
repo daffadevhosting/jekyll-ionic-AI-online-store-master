@@ -128,44 +128,7 @@ function appendMessage(text, sender, targetChatMessages, isHistorical = false) {
   let contentHtml = '';
   let finalMessageText = String(text); // Default: gunakan teks asli
 
-  // Jika pengirim adalah AI, kita coba ekstrak JSON dan proses aksinya
-  if (sender === 'ai') {
-      const { parsed, remaining } = findJsonInText(finalMessageText); // Gunakan finalMessageText untuk mencari JSON
 
-      if (parsed) { // Jika ada JSON yang berhasil diparse
-          let actionHandled = false;
-
-          // Cek jika ini adalah aksi yang harus ditampilkan sebagai teks produk
-          if (typeof parsed === 'object' && parsed.action === 'viewProductDetails' && parsed.product) {
-              // [MODIFIED] Validasi produk sebelum menampilkannya
-              if (parsed.product.title) {
-                  finalMessageText = remaining + '\n\n' + formatProductAsText(parsed.product); // Tambahkan detail produk sebagai teks
-              } else {
-                  // Jika produk tidak valid (misal, tidak ada judul), tampilkan hanya narasi
-                  finalMessageText = remaining;
-              }
-              actionHandled = true;
-          } else if (Array.isArray(parsed)) { // Jika ini adalah array produk (misal dari hasil search)
-              const productsAsText = parsed.map(p => formatProductAsText(p)).join('\n\n---\n\n');
-              finalMessageText = remaining + '\n\nBerikut produk yang saya temukan:\n\n' + productsAsText;
-              actionHandled = true;
-          } else if (typeof parsed === 'object' && parsed.action) {
-              // Untuk aksi lain (addToCart, emptyCart, checkout), proses saja
-              let redirected = processAiCartAction(parsed, targetChatMessages); // Process action (may redirect)
-              if (redirected) return; // Jika ada redirect, berhenti di sini
-              finalMessageText = remaining; // Teks yang tersisa setelah JSON diproses
-              actionHandled = true; // Aksi diproses, jadi jangan tampilkan JSON mentah
-          } else {
-              finalMessageText = String(text); // Jika tidak ada JSON yang dikenali, gunakan teks asli
-          }
-
-          // Jika aksi sudah ditangani (baik sebagai kartu atau teks), dan teks narasi kosong,
-          // maka ini mencegah penambahan div pesan teks kosong.
-          if (actionHandled && finalMessageText.trim() === '') {
-              return; // Jika JSON ditangani dan tidak ada teks narasi, jangan tampilkan apa-apa
-          }
-      }
-  }
 
   // Jika masih ada teks yang perlu ditampilkan (setelah potensi ekstraksi JSON)
   if (finalMessageText.trim().length > 0) {
@@ -584,17 +547,45 @@ async function handleChatSubmit(chatInput, chatSendBtn, targetChatMessages) {
   // Periksa apakah ada JSON dalam respons AI
   const { parsed, remaining: cleanResponse } = findJsonInText(aiResponse);
 
-  // Jika ada JSON yang berhasil diparse, proses aksinya terlebih dahulu
-  let actionHandled = false;
-  if (parsed) {
-      actionHandled = processAiCartAction(parsed, targetChatMessages);
-  }
-
   // Tampilkan teks narasi yang sudah bersih
   if (cleanResponse.trim().length > 0) {
       appendMessage(cleanResponse, 'ai', targetChatMessages);
-  } else if (!actionHandled) {
-      // Jika tidak ada teks narasi dan tidak ada aksi yang ditangani, berikan pesan fallback
+  }
+
+  // Jika ada JSON yang berhasil diparse, proses aksinya
+  if (parsed) {
+      if (typeof parsed === 'object' && parsed.action === 'viewProductDetails' && parsed.product) {
+          // Render product card directly
+          const product = parsed.product;
+          let colorsHtml = '';
+          if (product.styles && product.styles.length > 0) {
+              colorsHtml = `
+                  <div class="mt-2">
+                      <div class="flex flex-wrap items-center gap-2">
+                          ${product.styles.map(style => `
+                              <span class="w-6 h-6 rounded-full border-2 border-gray-200" title="${style.name}" style="background-color: ${style.color};"></span>
+                          `).join('')}
+                      </div>
+                  </div>
+              `;
+          }
+          const productCardHtml = `
+              <div class="product-card-in-chat border border-gray-200 rounded-lg p-3 mt-2 max-w-sm">
+                  <img src="${product.image}" alt="${product.title}" class="w-full rounded-md mb-2">
+                  <h3 class="font-bold text-base">${product.title}</h3>
+                  <p class="text-purple-600 font-bold">Rp ${product.discount}</p>
+                  ${product.price && product.price !== product.discount ? `<p class="text-sm text-gray-500 line-through">Rp ${product.price}</p>` : ''}
+                  <p class="text-sm mt-1">${product.description}</p>
+                  ${colorsHtml}
+              </div>
+          `;
+          appendMessage(productCardHtml, 'ai', targetChatMessages);
+      } else {
+          // For other actions, process them
+          processAiCartAction(parsed, targetChatMessages);
+      }
+  } else if (cleanResponse.trim().length === 0) {
+      // Fallback if no narrative and no parsed action
       appendMessage("Maaf, ada masalah dalam merespons. Bisa ulangi?", 'ai', targetChatMessages);
   }
 
@@ -632,14 +623,48 @@ async function requestProductDetail(product, targetChatMessages) {
     hideTypingIndicator(targetChatMessages);
 
     // Periksa apakah ada JSON dalam respons AI sebelum memanggil appendMessage
-    const { parsed, remaining } = findJsonInText(aiResponse);
+    const { parsed, remaining: cleanResponse } = findJsonInText(aiResponse);
 
+    // Tampilkan teks narasi yang sudah bersih
+    if (cleanResponse.trim().length > 0) {
+        appendMessage(cleanResponse, 'ai', targetChatMessages);
+    }
+
+    // Jika ada JSON yang berhasil diparse, proses aksinya
     if (parsed) {
-        appendMessage(aiResponse, 'ai', targetChatMessages); // Kirim respons utuh ke appendMessage
-    } else if (remaining) {
-        appendMessage(remaining, 'ai', targetChatMessages);
-    } else {
-         appendMessage("Maaf, ada masalah dalam merespons detail produk. Bisa ulangi?", 'ai', targetChatMessages);
+        if (typeof parsed === 'object' && parsed.action === 'viewProductDetails' && parsed.product) {
+            // Render product card directly
+            const product = parsed.product;
+            let colorsHtml = '';
+            if (product.styles && product.styles.length > 0) {
+                colorsHtml = `
+                    <div class="mt-2">
+                        <div class="flex flex-wrap items-center gap-2">
+                            ${product.styles.map(style => `
+                                <span class="w-6 h-6 rounded-full border-2 border-gray-200" title="${style.name}" style="background-color: ${style.color};"></span>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+            const productCardHtml = `
+                <div class="product-card-in-chat border border-gray-200 rounded-lg p-3 mt-2 max-w-sm">
+                    <img src="${product.image}" alt="${product.title}" class="w-full rounded-md mb-2">
+                    <h3 class="font-bold text-base">${product.title}</h3>
+                    <p class="text-purple-600 font-bold">Rp ${product.discount}</p>
+                    ${product.price && product.price !== product.discount ? `<p class="text-sm text-gray-500 line-through">Rp ${product.price}</p>` : ''}
+                    <p class="text-sm mt-1">${product.description}</p>
+                    ${colorsHtml}
+                </div>
+            `;
+            appendMessage(productCardHtml, 'ai', targetChatMessages);
+        } else {
+            // For other actions, process them
+            processAiCartAction(parsed, targetChatMessages);
+        }
+    } else if (cleanResponse.trim().length === 0) {
+        // Fallback if no narrative and no parsed action
+        appendMessage("Maaf, ada masalah dalam merespons detail produk. Bisa ulangi?", 'ai', targetChatMessages);
     }
 }
 

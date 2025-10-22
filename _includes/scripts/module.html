@@ -93,12 +93,11 @@ function findJsonInText(text) {
  * @returns {string} Teks terformat dari detail produk.
  */
 function formatProductAsText(product) {
-    let details = `*${product.title || 'Produk Tidak Diketahui'}*\n`; // Fallback untuk judul
-    // Menambahkan pemeriksaan untuk 'discount' dan 'price'
+    let details = `![${product.title}](${product.image})\n\n*${product.title || 'Produk Tidak Diketahui'}*\n`;
     const displayDiscount = product.discount ? `Rp ${product.discount}` : 'Harga tidak tersedia';
     const displayPrice = product.price && product.price !== product.discount ? `(_Harga Normal: Rp ${product.price}_)` : '';
     details += `Harga: ${displayDiscount} ${displayPrice}\n`;
-    details += `Stok: ${product.stok || 'Informasi stok tidak tersedia'}\n`; // Fallback untuk stok
+    details += `Stok: ${product.stok || 'Informasi stok tidak tersedia'}\n`;
     if (product.description) {
         details += `Deskripsi: ${product.description}\n`;
     }
@@ -106,7 +105,6 @@ function formatProductAsText(product) {
         const colors = product.styles.map(s => s.name).join(', ');
         details += `Varian Warna: ${colors}\n`;
     }
-    // Tidak menyertakan URL gambar di sini, sesuai permintaan
     return details;
 }
 

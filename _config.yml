@@ -7,7 +7,7 @@ author: "<%= ENV['AUTHOR'] %>"
 description: > # this means to ignore newlines until "baseurl:"
   Toko Online AI commerce - Plus62 Store
 logo: /assets/images/icon_x512.png
-baseurl: "" # the subpath of your site, e.g. /blog
+baseurl: "/jekyll-ionic-AI-online-store-master" # the subpath of your site, e.g. /blog
 url: "" # the base hostname & protocol for your site
 
 # Markdown settings
